@@ -1,0 +1,10 @@
+{
+  "name": "pidutoan",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PiDự toán – bóc khối lượng và lập dự toán (static web app)",
+  "scripts": {
+    "test:parse": "node tests/parse-picad.mjs",
+    "start": "python3 -m http.server 8080"
+  }
+}
