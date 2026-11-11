@@ -55,6 +55,21 @@
     return best;
   }
 
+  /** Số chặt: chỉ nhận số thật hoặc chuỗi số (1.234,5 / 1234.5). Chuỗi chữ như "SL_T2" hay "#VALUE!" → NaN (không đoán). */
+  function strictNum(v) {
+    if (v === null || v === undefined || v === "") return null;
+    if (typeof v === "number") return Number.isFinite(v) ? v : NaN;
+    const s = String(v).trim().replace(/\s/g, "");
+    if (!s || s === "--" || s === "-") return null;
+    if (/^#/.test(s)) return NaN;
+    if (/^[-+]?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) return Number(s.replace(/\./g, "").replace(",", "."));
+    if (/^[-+]?\d+(,\d+)?$/.test(s)) return Number(s.replace(",", "."));
+    if (/^[-+]?\d*\.?\d+([eE][-+]?\d+)?$/.test(s)) return Number(s);
+    return NaN;
+  }
+  function numOr0(v) { const n = strictNum(v); return Number.isFinite(n) ? n : 0; }
+  function isErr(v) { const n = strictNum(v); return Number.isNaN(n); }
+
   function cellStr(v) {
     if (v === null || v === undefined) return "";
     if (typeof v === "number" && Number.isFinite(v)) return String(v);
@@ -98,19 +113,23 @@
     for (let r = index + 1; r < aoa.length; r++) {
       const row = aoa[r] || [];
       const ma = cellStr(row[map.ma]);
-      if (!ma || SKIP_MA.test(ma)) continue;
+      if (!ma || SKIP_MA.test(ma) || /^\(/.test(ma) || normHeader(ma) === "ma loai" || normHeader(ma) === "ma") continue;
       const rong = map.rong !== undefined ? cellStr(row[map.rong]) : "";
       const dai = map.dai !== undefined ? cellStr(row[map.dai]) : "";
       const cao = map.cao !== undefined ? cellStr(row[map.cao]) : "";
       const kichThuoc = [dai, rong, cao].filter((x) => x && x !== "--").join("×");
-      let kl = map.kl !== undefined ? parseNumber(row[map.kl]) : 0;
-      if (!kl) {
-        kl = ["slB1", "slT1", "slT2", "slT3"].reduce((s, k) => s + (map[k] !== undefined ? parseNumber(row[map[k]]) : 0), 0);
-      }
-      const slNote = ["B1", "T1", "T2", "T3"].map((f) => {
-        const key = "sl" + f;
-        return map[key] !== undefined ? f + "=" + parseNumber(row[map[key]]) : "";
-      }).filter(Boolean).join(", ");
+      const errs = [];
+      const byFloor = {};
+      ["B1", "T1", "T2", "T3"].forEach((f) => {
+        const k = "sl" + f; if (map[k] === undefined) return;
+        const v = row[map[k]];
+        if (isErr(v)) errs.push("SL_" + f + " = «" + cellStr(v) + "» không phải số"); else byFloor[f] = numOr0(v);
+      });
+      let kl = 0, klError = "";
+      if (map.kl !== undefined && isErr(row[map.kl])) { klError = "TỔNG = «" + cellStr(row[map.kl]) + "»"; errs.unshift(klError); }
+      else if (map.kl !== undefined) kl = numOr0(row[map.kl]);
+      if (!kl && !klError) kl = Object.values(byFloor).reduce((a, b) => a + b, 0);
+      const slNote = Object.entries(byFloor).map(([f, n]) => f + "=" + n).join(", ");
       out.push({
         ma,
         noiDung: (sheetName === "TK_CUA" ? "Cửa loại " : "Vật dụng loại ") + ma,
@@ -121,7 +140,11 @@
         ghiChu: map.ghiChu !== undefined ? cellStr(row[map.ghiChu]) : "",
         hangMuc: sheetName,
         dgVL: 0, dgNC: 0, dgMay: 0,
-        source: "excel:" + sheetName,
+        source: "excel:" + sheetName, origin: "bkl", bklSheet: sheetName, bklRow: r + 1,
+        byFloor, klError: errs.length ? errs.join("; ") : "",
+        dienGiai: Object.keys(byFloor).length ? Object.entries(byFloor).map(([f, n]) => f + ": " + n).join(" + ") + " = " + (klError ? "(lỗi công thức tổng)" : kl) + " bộ" : "",
+        nguon: "BKL " + sheetName + " dòng " + (r + 1),
+        loaiCongTac: sheetName === "TK_CUA" ? "cua" : "khac",
       });
     }
     return { sheet: sheetName, skipped: false, rows: out };
@@ -142,11 +165,13 @@
       const noiDung = map.noiDung !== undefined ? cellStr(row[map.noiDung]) : "";
       if (!ma && !noiDung) continue;
       if (SKIP_MA.test(ma) || SKIP_MA.test(noiDung)) continue;
-      const L = map.L !== undefined ? parseNumber(row[map.L]) : 0;
-      const day = map.day !== undefined ? parseNumber(row[map.day]) : 0;
-      const H = map.H !== undefined ? parseNumber(row[map.H]) : 0;
-      let kl = map.kl !== undefined ? parseNumber(row[map.kl]) : 0;
-      const m3 = map.m3 !== undefined ? parseNumber(row[map.m3]) : 0;
+      const errs = [];
+      const pick = (k, label) => { if (map[k] === undefined) return 0; const v = row[map[k]]; if (isErr(v)) { errs.push(label + " = «" + cellStr(v) + "»"); return 0; } return numOr0(v); };
+      const L = pick("L", "L");
+      const day = pick("day", "Dày");
+      const H = pick("H", "H");
+      let kl = pick("kl", "Khối lượng");
+      const m3 = pick("m3", "Thể tích");
       let donVi = map.donVi !== undefined ? cellStr(row[map.donVi]) : "";
       let kichThuoc = map.kichThuoc !== undefined ? cellStr(row[map.kichThuoc]) : "";
       if (!kichThuoc && (L || day || H)) {
@@ -169,10 +194,14 @@
         kl,
         ghiChu: map.ghiChu !== undefined ? cellStr(row[map.ghiChu]) : "",
         hangMuc: map.hangMuc !== undefined && cellStr(row[map.hangMuc]) ? cellStr(row[map.hangMuc]) : sheetName,
-        dgVL: map.dgVL !== undefined ? parseNumber(row[map.dgVL]) : 0,
-        dgNC: map.dgNC !== undefined ? parseNumber(row[map.dgNC]) : 0,
-        dgMay: map.dgMay !== undefined ? parseNumber(row[map.dgMay]) : 0,
-        source: "excel:" + sheetName,
+        dgVL: map.dgVL !== undefined ? numOr0(row[map.dgVL]) : 0,
+        dgNC: map.dgNC !== undefined ? numOr0(row[map.dgNC]) : 0,
+        dgMay: map.dgMay !== undefined ? numOr0(row[map.dgMay]) : 0,
+        L, day, H, m3,
+        source: "excel:" + sheetName, origin: "bkl", bklSheet: sheetName, bklRow: r + 1,
+        klError: errs.join("; "),
+        dienGiai: L && H ? (donVi && /m³|m3/.test(donVi) && day ? "L × dày × H = " + L + " × " + day + " × " + H + " / 1e9 = " + (Math.round(kl * 1000) / 1000) + " m³" : "L × H = " + L + " × " + H + " / 1e6 = " + (Math.round(kl * 1000) / 1000) + " m²") : "",
+        nguon: "BKL " + sheetName + " dòng " + (r + 1) + (map.nguon !== undefined && cellStr(row[map.nguon]) ? " · " + cellStr(row[map.nguon]).slice(0, 120) : ""),
       });
     }
     return { sheet: sheetName, skipped: false, rows: out };
@@ -181,13 +210,49 @@
   function parseWorkbook(workbook, parseNumber) {
     const sheets = [];
     let rows = [];
+    let formulaErrors = [];
+    if (root.PiFormula) {
+      try { formulaErrors = root.PiFormula.evaluateWorkbook(workbook) || []; } catch (e) { formulaErrors = [{ sheet: "", cell: "", error: "Không tính được công thức: " + e.message }]; }
+    }
+    const formulaWarnings = (formulaErrors && formulaErrors.warnings) || [];
     workbook.SheetNames.forEach((name) => {
       const aoa = XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, raw: true, defval: "" });
       const result = parseSheetRows(name, aoa, parseNumber);
       sheets.push({ sheet: name, count: result.rows.length, skipped: result.skipped, reason: result.reason });
       rows = rows.concat(result.rows);
     });
-    return { sheets, rows };
+    return { sheets, rows, formulaErrors: Array.from(formulaErrors), formulaWarnings };
+  }
+
+  /** Bảng giá tham chiếu: Mã, Tên, ĐV, Giá (một cột giá tổng) — hoặc VL/NC/Máy thì cộng lại. */
+  function parseRefPrices(aoa) {
+    let hi = -1, map = null;
+    for (let i = 0; i < Math.min(aoa.length, 20) && hi < 0; i++) {
+      const m = {};
+      (aoa[i] || []).forEach((c, idx) => {
+        const h = normHeader(c);
+        if (!h) return;
+        if (m.ma === undefined && (h === "ma" || h.startsWith("ma "))) m.ma = idx;
+        else if (m.ten === undefined && (h.startsWith("ten") || h.includes("noi dung"))) m.ten = idx;
+        else if (m.dv === undefined && (h === "dv" || h.startsWith("don vi") || h === "dvt")) m.dv = idx;
+        else if (h.includes("vat lieu") || h === "vl" || h === "dg vl") m.vl = idx;
+        else if (h.includes("nhan cong") || h === "nc" || h === "dg nc") m.nc = idx;
+        else if (h.includes("may") && !h.includes("ma ")) m.may = idx;
+        else if (m.gia === undefined && (h === "gia" || h.startsWith("gia ") || h.startsWith("don gia") || h === "dg")) m.gia = idx;
+      });
+      if (m.ma !== undefined && (m.gia !== undefined || m.vl !== undefined)) { hi = i; map = m; }
+    }
+    if (!map) return [];
+    const out = [];
+    for (let r = hi + 1; r < aoa.length; r++) {
+      const row = aoa[r] || [];
+      const ma = cellStr(row[map.ma]);
+      if (!ma) continue;
+      const gia = map.gia !== undefined ? strictNum(row[map.gia]) : ["vl", "nc", "may"].reduce((s, k) => s + (map[k] !== undefined ? numOr0(row[map[k]]) : 0), 0);
+      if (!Number.isFinite(gia)) continue;
+      out.push({ ma, ten: map.ten !== undefined ? cellStr(row[map.ten]) : "", donVi: map.dv !== undefined ? cellStr(row[map.dv]) : "", gia });
+    }
+    return out;
   }
 
   function parsePriceSheet(aoa, parseNumber) {
@@ -224,5 +289,5 @@
     return out;
   }
 
-  root.PiExcel = { parseWorkbook, parseSheetRows, parsePriceSheet, detectHeader, classifyHeader, normHeader };
+  root.PiExcel = { parseWorkbook, parseRefPrices, strictNum, parseSheetRows, parsePriceSheet, detectHeader, classifyHeader, normHeader };
 })(typeof window !== "undefined" ? window : globalThis);

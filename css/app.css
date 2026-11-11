@@ -171,3 +171,28 @@ body.modal-open { overflow: hidden; }
   .vbar .btn { padding: 6px 8px; font-size: 13px; }
   .modal { padding: 6px; }
 }
+
+/* ---- Quy trình 9 bước / kiểm tra ---- */
+.wizard { display: grid; grid-template-columns: 280px 1fr; gap: 14px; align-items: start; }
+.wsteps { display: flex; flex-direction: column; gap: 6px; position: sticky; top: 8px; }
+.wstep { display: flex; gap: 10px; align-items: flex-start; text-align: left; background: var(--bg2); color: inherit; border: 1px solid var(--line, #2a3a50); border-left: 4px solid #888; border-radius: 10px; padding: 8px 10px; cursor: pointer; font-family: Arial, sans-serif; }
+.wstep small { display: block; font-size: 11px; opacity: .8; margin-top: 2px; }
+.wstep .wn { width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: rgba(127,127,127,.25); font-weight: 700; flex: none; }
+.wstep.done { border-left-color: #2fae66; } .wstep.done .wn { background: #2fae66; color: #fff; }
+.wstep.miss { border-left-color: #e0a526; }
+.wstep.locked { opacity: .5; cursor: not-allowed; }
+.wstep.on { outline: 2px solid var(--accent); }
+.whead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.wnav { justify-content: space-between; margin-top: 14px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 6px 0; }
+.chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; background: rgba(127,127,127,.25); white-space: nowrap; }
+.chip.red { background: #c0392b; color: #fff; } .chip.yellow { background: #e0a526; color: #1a1a1a; } .chip.green { background: #2fae66; color: #fff; } .chip.info { background: #3d6e9e; color: #fff; }
+tr.lv-red td { background: rgba(192,57,43,.12); } tr.lv-yellow td { background: rgba(224,165,38,.12); }
+table.issues td:nth-child(5) { min-width: 280px; }
+label.inline { display: inline-flex; gap: 6px; align-items: center; margin-left: 8px; }
+.small { font-size: 12px; }
+details.card summary { cursor: pointer; }
+textarea { width: 100%; font-family: Arial, sans-serif; }
+@media (max-width: 860px) { .wizard { grid-template-columns: 1fr; } .wsteps { position: static; flex-direction: row; overflow-x: auto; } .wstep { min-width: 180px; } }
+.ios-hint { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 50; background: var(--bg2); border: 1px solid var(--accent); border-radius: 12px; padding: 10px 14px; box-shadow: 0 6px 24px rgba(0,0,0,.35); font-size: 14px; max-width: 92vw; }
+@media print { .wsteps, .wnav { display: none !important; } .wizard { display: block; } }

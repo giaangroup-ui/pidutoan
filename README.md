@@ -57,3 +57,17 @@ node tests/parse-picad.mjs
 python3 tests/make_fixtures.py     # tạo PDF bảng + mặt bằng 1:100, PDF scan, PNG
 python3 tests/media_e2e.py         # hoặc: python3 tests/media_e2e.py https://giaangroup-ui.github.io/pidutoan/
 ```
+
+## Quy trình 9 bước & kiểm tra chéo (kỷ luật kiến trúc)
+
+- **Quy trình** (tab «Quy trình»): 1 Thông tin công trình → 2 Nhận & kiểm tra hồ sơ (DXF/BKL, checklist bộ môn, layer chưa chuẩn, block chưa mã) → 3 Danh mục công việc (loại công tác, bộ môn, tầng) → 4 Đo bóc có diễn giải (H tầng, KL bóc DXF, ô KL lỗi) → 5 Kiểm tra chéo → 6 Áp mã đơn giá → 7 Tổng hợp chi phí (cấu trúc TT 36/2026 Bảng 3.8, tỷ lệ người dùng xác nhận) → 8 Kiểm giá → 9 Báo cáo & duyệt. Bước sau bị khóa khi bước trước còn thiếu.
+- **Kiểm tra** (tab «Kiểm tra»): ΣL tường theo nhóm/tầng, từng tag (đi theo leader), có mặt hai phía, cửa (PD ↔ TK_CUA), đầu tường hở, trùng dòng (QĐ 1041 Mục I.4), KL 0/âm, KL ≠ L×H, đơn vị, lỗi công thức Excel, tỷ lệ (khoảng **dữ liệu mẫu**). Ngưỡng xanh ≤2%, vàng 2–5%, đỏ >5% — sửa được. Xuất Excel / In PDF, có «Người kiểm tra / ngày duyệt».
+- **Chuẩn layer**: hồ sơ layer/block sửa được, nhập/xuất JSON.
+- Quy tắc trừ chi tiết từng công tác: **cần xác minh / người dùng tự cấu hình** (QĐ 1041/QĐ-BXD chỉ nêu nguyên tắc chung).
+
+Kiểm thử: `node tests/arch-check.cjs` (DXF + BKL v3.7 và BKL sửa: 1 dòng +10%, 1 dòng xóa → cả hai đỏ) · `python3 tests/flow_e2e.py [url]` (giao diện, chặn bước, xuất BKL, PWA).
+
+## Cài app (PWA)
+
+`manifest.webmanifest`, icon 192/512 + maskable, `apple-touch-icon`, service worker `sw.js?v=<phiên bản>` (cache `pidutoan-<phiên bản>`, network-first cho html/js/css, xóa cache cũ khi kích hoạt). Nút «Cài app» dùng `beforeinstallprompt`; iPhone/iPad: Safari → Chia sẻ → Thêm vào MH chính.
+Trước mỗi lần phát hành: `python3 tools/set-version.py` (đổi `?v=` trong index.html và `version.json`).

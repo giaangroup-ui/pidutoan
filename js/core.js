@@ -41,10 +41,13 @@
   function defaultRates() {
     return {
       cpc: 0,
+      tt: 0,
       tnctt: 0,
       vat: 10,
+      lt: 0,
       duPhong: 0,
-      note: "Tỷ lệ do người dùng tự nhập theo quy định hiện hành (Luật Xây dựng 135/2025/QH15, Nghị định 206/2026/NĐ-CP, Thông tư 38/2026/TT-BXD). Không phải định mức gắn sẵn của app.",
+      confirmed: false,
+      note: "Tỷ lệ do người dùng nhập / xác nhận theo TT 36/2026/TT-BXD Phụ lục III và NĐ 206/2026/NĐ-CP Điều 12. App có nút gợi ý theo bảng của TT 36 (dòng công trình dân dụng) nhưng người dùng phải xác nhận.",
     };
   }
 
@@ -134,26 +137,20 @@
     });
     const direct = rows.reduce((s, r) => s + r.total, 0);
     const rates = Object.assign(defaultRates(), project.rates || {});
-    const cpc = direct * (parseNumber(rates.cpc) / 100);
-    const tnctt = (direct + cpc) * (parseNumber(rates.tnctt) / 100);
-    const beforeVat = direct + cpc + tnctt;
-    const vat = beforeVat * (parseNumber(rates.vat) / 100);
-    const afterVat = beforeVat + vat;
-    const duPhong = afterVat * (parseNumber(rates.duPhong) / 100);
-    const grand = afterVat + duPhong;
-    return {
-      rows,
-      groups: Object.values(groups),
-      direct,
-      cpc,
-      tnctt,
-      beforeVat,
-      vat,
-      afterVat,
-      duPhong,
-      grand,
-      rates,
-    };
+    const pct = (k) => parseNumber(rates[k]) / 100;
+    // Cơ cấu theo TT 36/2026/TT-BXD Phụ lục III Bảng 3.8 (NĐ 206/2026/NĐ-CP Điều 12)
+    const cpc = direct * pct("cpc");            // C: chi phí chung = T × tỷ lệ
+    const ttkxd = direct * pct("tt");           // TT: công việc không xác định được KL = T × tỷ lệ
+    const gianTiep = cpc + ttkxd;               // GT = C + TT
+    const tnctt = (direct + gianTiep) * pct("tnctt"); // TL = (T + GT) × tỷ lệ
+    const beforeVat = direct + gianTiep + tnctt; // GXDTT
+    const vat = beforeVat * pct("vat");          // GTGT
+    const afterVat = beforeVat + vat;            // GXD
+    const nhaTam = beforeVat * pct("lt") * (1 + pct("vat")); // LT = GXDTT × tỷ lệ × (1 + thuế suất) — cách hiểu, cần xác minh
+    const duPhongBase = afterVat + nhaTam;
+    const duPhong = duPhongBase * pct("duPhong");
+    const grand = duPhongBase + duPhong;
+    return { rows, groups: Object.values(groups), direct, cpc, ttkxd, gianTiep, tnctt, beforeVat, vat, afterVat, nhaTam, duPhong, grand, rates };
   }
 
   function suggestPriceCode(row) {

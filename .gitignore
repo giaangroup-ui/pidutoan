@@ -5,3 +5,4 @@ node_modules/
 package-lock.json
 tests/parse-picad-report.json
 tests/out/
+tests/tmp/

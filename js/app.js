@@ -58,6 +58,9 @@
       prices: renderPrices,
       estimate: renderEstimate,
       export: renderExport,
+      workflow: PiFlow.renderWizard,
+      checks: PiFlow.renderChecks,
+      layers: PiFlow.renderLayers,
     };
     root.innerHTML = "";
     root.appendChild(pages[view]());
@@ -116,7 +119,7 @@
 
     box.querySelectorAll("[data-open]").forEach((b) => b.onclick = () => {
       state.currentProjectId = b.dataset.open;
-      view = "qty";
+      view = "workflow";
       save(); render();
     });
     box.querySelectorAll("[data-ren]").forEach((b) => b.onclick = () => {
@@ -195,10 +198,11 @@
         <td><input data-f="kichThuoc" data-id="${r.id}" value="${escapeHtml(r.kichThuoc || "")}"></td>
         <td><input data-f="donVi" data-id="${r.id}" value="${escapeHtml(r.donVi || "")}" style="width:64px"></td>
         <td><input data-f="kl" data-id="${r.id}" value="${escapeHtml(r.kl)}" class="num" style="width:90px"></td>
+        <td><input data-f="dienGiai" data-id="${r.id}" value="${escapeHtml(r.dienGiai || "")}" placeholder="công thức"></td>
         <td>${priceSelect(r)}</td>
-        <td class="muted">${escapeHtml((r.source || "").slice(0, 48))}</td>
+        <td class="muted" title="${escapeHtml(r.nguon || r.source || "")}">${escapeHtml((r.nguon || r.source || "").slice(0, 48))}</td>
         <td><button class="btn bad" data-delrow="${r.id}">Xóa</button></td>
-      </tr>`).join("") || `<tr><td colspan="11" class="empty">Chưa có dòng khối lượng.</td></tr>`;
+      </tr>`).join("") || `<tr><td colspan="12" class="empty">Chưa có dòng khối lượng.</td></tr>`;
 
     const dxfHtml = dxfSession ? renderDxfTables() : `<p class="muted">Chưa tải DXF. Nên bóc layer tường / sàn / hatch; tránh layer chữ (0-TEXT) vì khung chữ không phải khối lượng xây dựng.</p>`;
 
@@ -235,7 +239,7 @@
         <div class="table-wrap"><table>
           <thead><tr>
             <th>STT</th><th>Mã</th><th>Nội dung</th><th>Hạng mục / tầng</th><th>Vị trí</th>
-            <th>Kích thước</th><th>ĐV</th><th>KL</th><th>Đơn giá</th><th>Nguồn</th><th></th>
+            <th>Kích thước</th><th>ĐV</th><th>KL</th><th>Diễn giải</th><th>Đơn giá</th><th>Nguồn</th><th></th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table></div>
@@ -256,7 +260,7 @@
     $("#addRow", box).onclick = () => {
       p.qtyRows.push({
         id: C.uid("kl"), ma: "", noiDung: "", viTri: "", kichThuoc: "",
-        donVi: "m²", kl: 0, ghiChu: "", hangMuc: "", priceCode: "", source: "manual",
+        donVi: "m²", kl: 0, ghiChu: "", hangMuc: "", priceCode: "", source: "manual", nguon: "Người dùng nhập tay", dienGiai: "", origin: "manual",
       });
       p.updatedAt = new Date().toISOString();
       save(); render();
@@ -277,6 +281,7 @@
         if (!row) return;
         const f = inp.dataset.f;
         row[f] = f === "kl" ? C.parseNumber(inp.value) : inp.value;
+        if (f === "kl" && row.klError) { row.klNote = "KL nhập tay thay ô lỗi (" + row.klError + ")"; delete row.klError; }
         p.updatedAt = new Date().toISOString();
         save();
       };
@@ -411,6 +416,9 @@
         const text = reader.result;
         const dxf = PiDxfTakeoff.parseText(text);
         dxfSession = { name: file.name, dxf, summary: PiDxfTakeoff.summarize(dxf, dxfUnit) };
+        PiFlow.onDxfLoaded(file.name, text, dxf);
+        const pm = currentProject();
+        if (pm && pm.dxfMeta && pm.dxfMeta.unmapped) setTimeout(() => setFlash("Hồ sơ chưa chuẩn: " + pm.dxfMeta.unmapped + " layer chưa có trong Chuẩn layer."), 50);
         setFlash("Đã phân tích " + file.name + " — " + dxfSession.summary.entityCount + " entity.");
       } catch (e) {
         console.error(e);
@@ -426,15 +434,20 @@
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const wb = XLSX.read(reader.result, { type: "array" });
+        const wb = XLSX.read(reader.result, { type: "array", cellFormula: true, sheetStubs: true });
         const parsed = PiExcel.parseWorkbook(wb, C.parseNumber);
+        const oldBkl = p.qtyRows.filter((r) => r.origin === "bkl").length;
+        if (oldBkl && confirm("Công trình đã có " + oldBkl + " dòng BKL. Thay bằng file mới (OK) hay giữ và thêm (Hủy)?")) p.qtyRows = p.qtyRows.filter((r) => r.origin !== "bkl");
         parsed.rows.forEach((row) => {
-          p.qtyRows.push(Object.assign({ id: C.uid("kl"), priceCode: C.suggestPriceCode(row) }, row));
+          const r = Object.assign({ id: C.uid("kl"), priceCode: "" }, row);
+          if (!r.loaiCongTac || r.loaiCongTac === "khac") r.loaiCongTac = PiRules.classify(r);
+          p.qtyRows.push(r);
         });
+        p.bklMeta = { name: file.name, at: new Date().toISOString(), rows: parsed.rows.length, formulaErrors: parsed.formulaErrors, formulaWarnings: parsed.formulaWarnings, sheets: parsed.sheets };
         p.updatedAt = new Date().toISOString();
         save();
         const sheetInfo = parsed.sheets.map((s) => s.sheet + ": " + s.count).join("; ");
-        setFlash("Đã nhập " + parsed.rows.length + " dòng từ " + file.name + " (" + sheetInfo + ").");
+        setFlash("Đã nhập " + parsed.rows.length + " dòng từ " + file.name + " (" + sheetInfo + ")" + (parsed.formulaErrors.length ? " — " + parsed.formulaErrors.length + " ô lỗi công thức, xem tab Kiểm tra." : "."));
       } catch (e) {
         console.error(e);
         alert("Không đọc được Excel: " + e.message);
@@ -559,11 +572,13 @@
       <section class="card">
         <h2>Dự toán — ${escapeHtml(p.name)}</h2>
         <p class="muted">${escapeHtml(p.location || "")}${p.owner ? " · " + escapeHtml(p.owner) : ""}</p>
-        <div class="callout info">Chi phí trực tiếp = KL × (đơn giá VL + NC + máy). Các tỷ lệ dưới đây do người dùng tự nhập theo quy định hiện hành — Luật Xây dựng 135/2025/QH15, Nghị định 206/2026/NĐ-CP, Thông tư 38/2026/TT-BXD. App không gắn cứng định mức.</div>
-        <div class="grid cols-4">
-          <label>Chi phí chung (%)<input id="rtCpc" type="number" step="0.01" value="${est.rates.cpc}"></label>
+        <div class="callout info">Cơ cấu theo TT 36/2026/TT-BXD Phụ lục III Bảng 3.8 và NĐ 206/2026/NĐ-CP Điều 12. Tỷ lệ do người dùng nhập / xác nhận (bước 7 của Quy trình có nút gợi ý theo TT 36). ${est.rates.confirmed ? "" : "<b>Tỷ lệ chưa được xác nhận.</b>"}</div>
+        <div class="grid cols-3">
+          <label>Chi phí chung C (%)<input id="rtCpc" type="number" step="0.01" value="${est.rates.cpc}"></label>
+          <label>CP không xác định KL (%)<input id="rtTt" type="number" step="0.01" value="${est.rates.tt}"></label>
           <label>TNCTT (%)<input id="rtTn" type="number" step="0.01" value="${est.rates.tnctt}"></label>
-          <label>VAT (%)<input id="rtVat" type="number" step="0.01" value="${est.rates.vat}"></label>
+          <label>Thuế GTGT (%)<input id="rtVat" type="number" step="0.01" value="${est.rates.vat}"></label>
+          <label>Nhà tạm (%)<input id="rtLt" type="number" step="0.01" value="${est.rates.lt}"></label>
           <label>Dự phòng (%)<input id="rtDp" type="number" step="0.01" value="${est.rates.duPhong}"></label>
         </div>
         <div class="toolbar no-print">
@@ -579,11 +594,15 @@
       </section>
       <section class="card">
         <h3>Tổng hợp</h3>
-        ${kpi("Chi phí trực tiếp (VL + NC + máy)", est.direct)}
-        ${kpi("Chi phí chung", est.cpc)}
-        ${kpi("Thu nhập chịu thuế tính trước", est.tnctt)}
-        ${kpi("Giá trước VAT", est.beforeVat)}
-        ${kpi("VAT", est.vat)}
+        ${kpi("I. Chi phí trực tiếp T (VL + NC + máy)", est.direct)}
+        ${kpi("II.1 Chi phí chung C", est.cpc)}
+        ${kpi("II.2 CP một số công việc không xác định được KL từ thiết kế TT", est.ttkxd)}
+        ${kpi("II. Chi phí gián tiếp GT = C + TT", est.gianTiep)}
+        ${kpi("III. Thu nhập chịu thuế tính trước TL", est.tnctt)}
+        ${kpi("Chi phí xây dựng trước thuế GXDTT", est.beforeVat)}
+        ${kpi("IV. Thuế GTGT", est.vat)}
+        ${kpi("Chi phí xây dựng sau thuế GXD", est.afterVat)}
+        ${kpi("V. Nhà tạm để ở và điều hành thi công LT", est.nhaTam)}
         ${kpi("Dự phòng", est.duPhong)}
         ${kpi("TỔNG CỘNG", est.grand)}
       </section>
@@ -591,8 +610,10 @@
     $("#saveRates", box).onclick = () => {
       p.rates = Object.assign(C.defaultRates(), p.rates, {
         cpc: C.parseNumber($("#rtCpc", box).value),
+        tt: C.parseNumber($("#rtTt", box).value),
         tnctt: C.parseNumber($("#rtTn", box).value),
         vat: C.parseNumber($("#rtVat", box).value),
+        lt: C.parseNumber($("#rtLt", box).value),
         duPhong: C.parseNumber($("#rtDp", box).value),
       });
       p.updatedAt = new Date().toISOString();
@@ -617,13 +638,17 @@
         <h2>Xuất hồ sơ</h2>
         <p>Xuất bảng dự toán Excel (có công thức thành tiền và cộng tỷ lệ) hoặc in PDF bằng hộp thoại in của trình duyệt.</p>
         <div class="toolbar">
-          <button class="btn pri" id="expXlsx">Xuất Excel</button>
+          <button class="btn pri" id="expXlsx">Xuất dự toán Excel</button>
+          <button class="btn" id="expBkl">Xuất BKL Excel (STT, Mã hiệu, Nội dung, ĐV, Diễn giải, Khối lượng)</button>
+          <button class="btn" id="expChk">Xuất kết quả kiểm tra Excel</button>
           <button class="btn" id="expPrint">In / lưu PDF</button>
         </div>
         <div class="callout">File Excel ghi rõ «đơn giá do người dùng cung cấp / dữ liệu mẫu» trên dòng tiêu đề. Không trình bày đây là dự toán pháp lý đã thẩm định.</div>
       </section>
     </div>`);
     $("#expXlsx", box).onclick = () => exportEstimateXlsx(p);
+    $("#expBkl", box).onclick = () => PiFlow.exportBklXlsx(p);
+    $("#expChk", box).onclick = () => PiFlow.exportChecksXlsx(p);
     $("#expPrint", box).onclick = () => {
       view = "estimate";
       render();
@@ -651,7 +676,7 @@
       ["Địa điểm", p.location || ""],
       ["Chủ đầu tư", p.owner || ""],
       ["Xuất từ PiDự toán — file hỗ trợ soạn thảo, không thay thế thẩm định"],
-      ["Căn cứ cần theo dõi: Luật XD 135/2025/QH15; NĐ 206/2026/NĐ-CP; TT 38/2026/TT-BXD. Tỷ lệ CPC/TNCTT/VAT/dự phòng do người dùng nhập."],
+      ["Căn cứ: NĐ 206/2026/NĐ-CP; TT 36/2026/TT-BXD; TT 38/2026/TT-BXD (định mức); QĐ 1041/QĐ-BXD (khối lượng, tham khảo)."],
       [],
       ["STT", "Mã", "Nội dung", "Hạng mục", "Vị trí", "ĐV", "KL", "ĐG VL", "ĐG NC", "ĐG máy", "TT VL", "TT NC", "TT máy", "Thành tiền", "Nguồn đơn giá"],
     ];
@@ -674,13 +699,20 @@
     const totalRow = lastData + 2;
     const klRange = est.rows.length ? `N${firstData}:N${lastData}` : null;
     aoa.push([]);
-    aoa.push(["", "", "Chi phí trực tiếp", "", "", "", "", "", "", "", "", "", "", klRange ? { f: `SUM(${klRange})` } : 0]);
-    aoa.push(["", "", "Chi phí chung (%)", "", "", "", est.rates.cpc, "", "", "", "", "", "", { f: `N${totalRow}*G${totalRow + 1}/100` }]);
-    aoa.push(["", "", "TNCTT (%)", "", "", "", est.rates.tnctt, "", "", "", "", "", "", { f: `(N${totalRow}+N${totalRow + 1})*G${totalRow + 2}/100` }]);
-    aoa.push(["", "", "Giá trước VAT", "", "", "", "", "", "", "", "", "", "", { f: `N${totalRow}+N${totalRow + 1}+N${totalRow + 2}` }]);
-    aoa.push(["", "", "VAT (%)", "", "", "", est.rates.vat, "", "", "", "", "", "", { f: `N${totalRow + 3}*G${totalRow + 4}/100` }]);
-    aoa.push(["", "", "Dự phòng (%)", "", "", "", est.rates.duPhong, "", "", "", "", "", "", { f: `(N${totalRow + 3}+N${totalRow + 4})*G${totalRow + 5}/100` }]);
-    aoa.push(["", "", "TỔNG CỘNG", "", "", "", "", "", "", "", "", "", "", { f: `N${totalRow + 3}+N${totalRow + 4}+N${totalRow + 5}` }]);
+    const R0 = totalRow;
+    const line = (label, rate, f) => aoa.push(["", "", label, "", "", "", rate === null ? "" : rate, "", "", "", "", "", "", { f }]);
+    line("I. Chi phí trực tiếp T", null, klRange ? `SUM(${klRange})` : "0");
+    line("II.1 Chi phí chung C (% × T)", Number(est.rates.cpc) || 0, `N${R0}*G${R0 + 1}/100`);
+    line("II.2 CP không xác định được KL TT (% × T)", Number(est.rates.tt) || 0, `N${R0}*G${R0 + 2}/100`);
+    line("II. Chi phí gián tiếp GT = C + TT", null, `N${R0 + 1}+N${R0 + 2}`);
+    line("III. Thu nhập chịu thuế tính trước TL (% × (T+GT))", Number(est.rates.tnctt) || 0, `(N${R0}+N${R0 + 3})*G${R0 + 4}/100`);
+    line("Chi phí xây dựng trước thuế GXDTT", null, `N${R0}+N${R0 + 3}+N${R0 + 4}`);
+    line("IV. Thuế GTGT (%)", Number(est.rates.vat) || 0, `N${R0 + 5}*G${R0 + 6}/100`);
+    line("Chi phí xây dựng sau thuế GXD", null, `N${R0 + 5}+N${R0 + 6}`);
+    line("V. Nhà tạm để ở và điều hành thi công LT (% × GXDTT × (1+VAT))", Number(est.rates.lt) || 0, `N${R0 + 5}*G${R0 + 8}/100*(1+G${R0 + 6}/100)`);
+    line("Dự phòng (% × (GXD + LT))", Number(est.rates.duPhong) || 0, `(N${R0 + 7}+N${R0 + 8})*G${R0 + 9}/100`);
+    line("TỔNG CỘNG", null, `N${R0 + 7}+N${R0 + 8}+N${R0 + 9}`);
+    aoa.push(["", "", "Cơ cấu theo TT 36/2026/TT-BXD PL III Bảng 3.8; NĐ 206/2026/NĐ-CP Điều 12. Tỷ lệ do người dùng xác nhận" + (est.rates.confirmed ? "." : " — CHƯA XÁC NHẬN.")]);
     const ws = XLSX.utils.aoa_to_sheet(aoa);
     ws["!cols"] = [6, 14, 40, 16, 16, 8, 10, 12, 12, 12, 14, 14, 14, 16, 40].map((w) => ({ wch: w }));
     XLSX.utils.book_append_sheet(wb, ws, "DuToan");
@@ -719,7 +751,12 @@
     render,
     flash: (msg) => setFlash(msg),
   });
-  window.PiApp = { getState: () => state, currentProject };
+  PiFlow.init({
+    getState: () => state, currentProject, save, render, flash: (m) => setFlash(m), fmtDate, downloadBlob,
+    handleDxf, handleXlsx, exportEstimateXlsx, setView: (v) => { view = v; render(); },
+    needProject: () => { const b = needProjectCard(); $("#goProj", b).onclick = () => { view = "projects"; render(); }; return b; },
+  });
+  window.PiApp = { getState: () => state, currentProject, setView: (v) => { view = v; render(); } };
 
   render();
 })();

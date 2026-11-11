@@ -301,6 +301,40 @@
     return out;
   }
 
+  /** Thuộc tính block (ATTRIB) — dxf-parser bỏ qua nên đọc thẳng từ văn bản DXF. handle INSERT → {TAG: giá trị} */
+  function extractAttribs(text) {
+    const lines = String(text).split(/\r?\n/);
+    const map = {};
+    let section = "", inEnt = null, lastInsert = null, attr = null;
+    const flush = () => {
+      if (attr && attr.tag) {
+        const owner = attr.owner || lastInsert;
+        if (owner) (map[owner] = map[owner] || {})[attr.tag.toUpperCase()] = attr.value || "";
+      }
+      attr = null;
+    };
+    for (let i = 0; i + 1 < lines.length; i += 2) {
+      const code = parseInt(lines[i], 10), val = lines[i + 1].trim();
+      if (code === 0) {
+        if (val === "SECTION") { const nx = lines[i + 3] !== undefined ? lines[i + 3].trim() : ""; section = nx; }
+        if (inEnt === "ATTRIB") flush();
+        inEnt = val;
+        if (val === "INSERT") lastInsert = null;
+        if (val === "ATTRIB") attr = { tag: "", value: "", owner: null };
+        continue;
+      }
+      if (section !== "ENTITIES") continue;
+      if (inEnt === "INSERT" && code === 5) lastInsert = val;
+      else if (inEnt === "ATTRIB" && attr) {
+        if (code === 2) attr.tag = val;
+        else if (code === 1) attr.value = lines[i + 1].replace(/\s+$/, "");
+        else if (code === 330) attr.owner = val;
+      }
+    }
+    if (inEnt === "ATTRIB") flush();
+    return map;
+  }
+
   function parseText(text, ParserCtor) {
     const Parser = ParserCtor || (typeof DxfParser !== "undefined" ? DxfParser : null);
     if (!Parser) throw new Error("Thiếu thư viện dxf-parser");
@@ -309,8 +343,12 @@
     const hatches = extractHatchEntities(text);
     dxf.entities = (dxf.entities || []).concat(hatches);
     dxf._hatchesExtracted = hatches.length;
+    const attribs = extractAttribs(text);
+    let withAttr = 0;
+    dxf.entities.forEach((e) => { if (e.type === "INSERT" && attribs[e.handle]) { e.attribs = attribs[e.handle]; withAttr++; } });
+    dxf._insertsWithAttribs = withAttr;
     return dxf;
   }
 
-  return { summarize, parseText, extractHatchEntities, unitScaleToMeters, polylineLength, shoelace, normalizeVerts };
+  return { summarize, parseText, extractHatchEntities, extractAttribs, unitScaleToMeters, polylineLength, shoelace, normalizeVerts };
 });

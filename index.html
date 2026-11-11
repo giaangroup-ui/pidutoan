@@ -6,7 +6,15 @@
   <title>PiDự toán — bóc khối lượng và lập dự toán</title>
   <meta name="description" content="PiDự toán giúp kiến trúc sư nhập khối lượng từ DXF hoặc bảng BKL PiCAD, gán đơn giá và xuất dự toán.">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="css/app.css">
+  <link rel="manifest" href="manifest.webmanifest?v=2026.11.11-0819">
+  <meta name="theme-color" content="#0e1621">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="PiDự toán">
+  <meta name="app-version" content="2026.11.11-0819">
+  <link rel="stylesheet" href="css/app.css?v=2026.11.11-0819">
 </head>
 <body>
   <header class="appbar">
@@ -19,34 +27,45 @@
     </div>
     <nav class="tabs">
       <button data-view="projects" class="on">Công trình</button>
+      <button data-view="workflow">Quy trình</button>
       <button data-view="qty">Khối lượng</button>
       <button data-view="prices">Đơn giá</button>
+      <button data-view="checks">Kiểm tra</button>
+      <button data-view="layers">Chuẩn layer</button>
       <button data-view="estimate">Dự toán</button>
       <button data-view="export">Xuất</button>
     </nav>
     <div class="right">
       <span id="projectSlot"></span>
+      <button class="btn pri" id="installBtn" hidden>Cài app</button>
       <button class="btn" id="themeBtn">Nền sáng</button>
     </div>
   </header>
   <main id="view"></main>
   <footer class="legal">
     PiDự toán hỗ trợ soạn khối lượng và dự toán, không thay thế thẩm định, thẩm duyệt hay cam kết pháp lý.
-    Người dùng tự nhập đơn giá và tỷ lệ chi phí theo quy định hiện hành:
-    Luật Xây dựng 135/2025/QH15, Nghị định 206/2026/NĐ-CP, Thông tư 38/2026/TT-BXD
-    (đã đối chiếu ngày ban hành/hiệu lực trên Cổng TTĐT Chính phủ, kế hoạch 10/11/2026).
+    Người dùng tự nhập đơn giá và xác nhận tỷ lệ chi phí theo quy định hiện hành:
+    Luật Xây dựng 135/2025/QH15, Nghị định 206/2026/NĐ-CP, Thông tư 36/2026/TT-BXD (chi phí), Thông tư 38/2026/TT-BXD (định mức),
+    Quyết định 1041/QĐ-BXD (hướng dẫn xác định khối lượng, tham khảo). Quy tắc đo chi tiết từng công tác: cần xác minh / người dùng tự cấu hình.
     Dữ liệu mẫu trong thư viện đơn giá không phải đơn giá chính thức.
   </footer>
   <script src="https://cdn.jsdelivr.net/npm/dxf-parser@1.1.2/dist/dxf-parser.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
-  <script src="js/sample-prices.js"></script>
-  <script src="js/core.js"></script>
-  <script src="js/dxf-takeoff.js"></script>
-  <script src="js/excel-io.js"></script>
-  <script src="js/docs-store.js"></script>
-  <script src="js/pdf-table.js"></script>
-  <script src="js/media.js"></script>
-  <script src="js/app.js"></script>
+  <script src="js/sample-prices.js?v=2026.11.11-0819"></script>
+  <script src="js/core.js?v=2026.11.11-0819"></script>
+  <script src="js/dxf-takeoff.js?v=2026.11.11-0819"></script>
+  <script src="js/xlsx-formula.js?v=2026.11.11-0819"></script>
+  <script src="js/excel-io.js?v=2026.11.11-0819"></script>
+  <script src="js/arch-standard.js?v=2026.11.11-0819"></script>
+  <script src="js/arch-takeoff.js?v=2026.11.11-0819"></script>
+  <script src="js/rules.js?v=2026.11.11-0819"></script>
+  <script src="js/checks.js?v=2026.11.11-0819"></script>
+  <script src="js/docs-store.js?v=2026.11.11-0819"></script>
+  <script src="js/pdf-table.js?v=2026.11.11-0819"></script>
+  <script src="js/media.js?v=2026.11.11-0819"></script>
+  <script src="js/workflow.js?v=2026.11.11-0819"></script>
+  <script src="js/app.js?v=2026.11.11-0819"></script>
+  <script src="js/pwa.js?v=2026.11.11-0819"></script>
 </body>
 </html>
