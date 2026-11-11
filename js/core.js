@@ -167,6 +167,9 @@
     const thick = parseNumber(row.kichThuoc) || parseNumber((row.noiDung || "").match(/(\d+)\s*mm/i));
     const fromText = (row.noiDung || "").match(/(\d{2,3})\s*mm/i);
     const t = thick || (fromText ? parseNumber(fromText[1]) : 0);
+    // Chỉ gán mã tường khi dòng đúng là tường / vách (không gán cho tủ, thiết bị…)
+    const isWall = /tường|tuong|vách|vach/.test(text) || /-(TU|XM)-/i.test(row.ma || "");
+    if (!isWall) return "";
     if (isXm || /^XM/i.test(row.hangMuc || "") || /-XM-/i.test(row.ma || "")) {
       return t >= 180 ? "XM.TU.200" : "XM.TU.110";
     }
