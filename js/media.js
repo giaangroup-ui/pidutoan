@@ -118,6 +118,7 @@
     if (m) m.remove();
     document.body.classList.remove("modal-open");
     if (viewer) { window.removeEventListener("resize", viewer.onResize); viewer = null; }
+    if (ctx) refreshList();
   }
 
   function pageOptions(n, sel) {
