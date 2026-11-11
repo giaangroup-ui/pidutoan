@@ -196,7 +196,7 @@
         <td><input data-f="donVi" data-id="${r.id}" value="${escapeHtml(r.donVi || "")}" style="width:64px"></td>
         <td><input data-f="kl" data-id="${r.id}" value="${escapeHtml(r.kl)}" class="num" style="width:90px"></td>
         <td>${priceSelect(r)}</td>
-        <td class="muted">${escapeHtml((r.source || "").slice(0, 32))}</td>
+        <td class="muted">${escapeHtml((r.source || "").slice(0, 48))}</td>
         <td><button class="btn bad" data-delrow="${r.id}">Xóa</button></td>
       </tr>`).join("") || `<tr><td colspan="11" class="empty">Chưa có dòng khối lượng.</td></tr>`;
 
@@ -209,6 +209,7 @@
         <div class="toolbar">
           <label class="btn pri">Tải DXF<input type="file" id="dxfFile" accept=".dxf" hidden></label>
           <label class="btn">Tải Excel/CSV BKL<input type="file" id="xlsxFile" accept=".xlsx,.xls,.csv" hidden></label>
+          <label class="btn pri">Tải PDF / Ảnh<input type="file" id="mediaFile" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" hidden></label>
           <button class="btn" id="addRow">Thêm dòng thủ công</button>
           <button class="btn warn" id="mapSample">Gán đơn giá mẫu theo từ khóa</button>
         </div>
@@ -251,6 +252,7 @@
     };
     $("#dxfFile", box).onchange = (ev) => handleDxf(ev.target.files[0]);
     $("#xlsxFile", box).onchange = (ev) => handleXlsx(ev.target.files[0]);
+    $("#mediaFile", box).onchange = (ev) => { const f = ev.target.files[0]; ev.target.value = ""; PiMedia.handleFile(f); };
     $("#addRow", box).onclick = () => {
       p.qtyRows.push({
         id: C.uid("kl"), ma: "", noiDung: "", viTri: "", kichThuoc: "",
@@ -293,6 +295,9 @@
       };
     });
     bindDxfActions(box, p);
+    const docCard = PiMedia.docListCard();
+    box.insertBefore(docCard, box.children[1]);
+    setTimeout(() => PiMedia.refreshList(), 0);
     return box;
   }
 
@@ -707,6 +712,14 @@
     state.theme = (state.theme || "dark") === "dark" ? "light" : "dark";
     save(); render();
   };
+
+  PiMedia.init({
+    getProject: currentProject,
+    save,
+    render,
+    flash: (msg) => setFlash(msg),
+  });
+  window.PiApp = { getState: () => state, currentProject };
 
   render();
 })();
